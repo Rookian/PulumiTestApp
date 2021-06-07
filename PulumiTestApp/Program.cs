@@ -1,20 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Azure.Identity;
-using Azure.ResourceManager.KeyVault.Models;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Storage;
-using Azure.ResourceManager.Storage.Models;
-using Microsoft.Graph;
 using Pulumi.Automation;
 using Pulumi.Azure.AppService;
 using Pulumi.Azure.AppService.Inputs;
 using Pulumi.Azure.Core;
 using Environment = System.Environment;
-using Permissions = Azure.ResourceManager.KeyVault.Models.Permissions;
-using Sku = Azure.ResourceManager.KeyVault.Models.Sku;
-using SkuName = Azure.ResourceManager.KeyVault.Models.SkuName;
 
 namespace PulumiTestApp
 {
@@ -26,51 +17,14 @@ namespace PulumiTestApp
 
         static async Task Main(string[] args)
         {
-            var graphClient = new GraphServiceClient(new AzureCliCredential());
-            var currentUser = await graphClient.Me.Request().GetAsync();
+            var configuration = new PulumiResourceConfiguration(
+                SubscriptionId, Location, TenantId, "myappvaulta1b2", 
+                "myapp-infra", "pulumistate", "myapp1pulumistate");
 
-            var managementClient = new ResourcesManagementClient(SubscriptionId, new AzureCliCredential());
-            var infraResourceGroup = "myapp-infra";
-            await managementClient.ResourceGroups.CreateOrUpdateAsync(
-                infraResourceGroup,
-                new Azure.ResourceManager.Resources.Models.ResourceGroup(Location));
-
-            var keyVaultManagementClient = new Azure.ResourceManager.KeyVault.KeyVaultManagementClient(SubscriptionId, new AzureCliCredential());
-            var vault = await keyVaultManagementClient.Vaults.StartCreateOrUpdateAsync(
-                infraResourceGroup, "vault", new VaultCreateOrUpdateParameters(Location, new VaultProperties(TenantId, new Sku(SkuName.Standard))));
-
-            await keyVaultManagementClient.Vaults.UpdateAccessPolicyAsync(infraResourceGroup, "vault",
-                AccessPolicyUpdateKind.Add, new VaultAccessPolicyParameters(new VaultAccessPolicyProperties(new[]
-                {
-                    new AccessPolicyEntry(TenantId, currentUser.Id, new Permissions
-                    {
-                        Keys = new List<KeyPermissions>
-                        {
-                            KeyPermissions.List, KeyPermissions.Decrypt, KeyPermissions.Encrypt, KeyPermissions.Get
-                        }
-                    })
-                })));
-
-            var storageManagementClient = new StorageManagementClient(SubscriptionId, new AzureCliCredential());
-            var accountName = "pulumi-state";
-            var storage = await storageManagementClient.StorageAccounts.StartCreateAsync(SubscriptionId, accountName,
-                new StorageAccountCreateParameters(
-                    new Azure.ResourceManager.Storage.Models.Sku(Azure.ResourceManager.Storage.Models.SkuName.StandardLRS),
-                    Kind.StorageV2, Location));
-
-            var response = await storageManagementClient.BlobContainers.GetAsync(infraResourceGroup, accountName, "pulumistate");
-
-            await storageManagementClient.BlobContainers.CreateAsync(infraResourceGroup, accountName, "pulumistate",
-                new BlobContainer
-                {
-                    PublicAccess = PublicAccess.None
-                });
-
-
+            await PulumiPreProvisioning.PreparePulumi(configuration);
 
             Environment.SetEnvironmentVariable("AZURE_KEYVAULT_AUTH_VIA_CLI", true.ToString());
             Environment.SetEnvironmentVariable("AZURE_STORAGE_ACCOUNT", "pulustate");
-
 
             Environment.SetEnvironmentVariable("AZURE_STORAGE_KEY", "Y/opC/OygdBNze5TLQHMqiwBLYqPzfXEz59th2cGhIdeBRdBpNmJaI30X5dV42/8yQIR5IRvaLV8UHUJUspaLA==");
 

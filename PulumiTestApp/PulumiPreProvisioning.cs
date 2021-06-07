@@ -1,0 +1,74 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Azure.Identity;
+using Azure.ResourceManager.KeyVault.Models;
+using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Storage.Models;
+using Microsoft.Graph;
+using Permissions = Azure.ResourceManager.KeyVault.Models.Permissions;
+using Sku = Azure.ResourceManager.KeyVault.Models.Sku;
+using SkuName = Azure.ResourceManager.KeyVault.Models.SkuName;
+
+namespace PulumiTestApp
+{
+    public class PulumiPreProvisioning
+    {
+        public static async Task PreparePulumi(PulumiResourceConfiguration configuration)
+        {
+            var graphClient = new GraphServiceClient(new AzureCliCredential());
+            var currentUser = await graphClient.Me.Request().GetAsync();
+
+            var managementClient = new ResourcesManagementClient(configuration.SubscriptionId, new AzureCliCredential());
+            await managementClient.ResourceGroups.CreateOrUpdateAsync(
+                configuration.ResourceGroupName,
+                new Azure.ResourceManager.Resources.Models.ResourceGroup(configuration.Location));
+
+            var keyVaultManagementClient =
+                new Azure.ResourceManager.KeyVault.KeyVaultManagementClient(configuration.SubscriptionId, new AzureCliCredential());
+
+            var vault = await keyVaultManagementClient.Vaults.StartCreateOrUpdateAsync(
+                configuration.ResourceGroupName, configuration.VaultName,
+                new VaultCreateOrUpdateParameters(configuration.Location, new VaultProperties(configuration.TenantId, new Sku(SkuName.Standard)){AccessPolicies = new List<AccessPolicyEntry>()
+                {
+                    new(configuration.TenantId, currentUser.Id, new Permissions
+                    {
+                        Keys = new List<KeyPermissions>
+                        {
+                            KeyPermissions.List, KeyPermissions.Decrypt, KeyPermissions.Encrypt, KeyPermissions.Get
+                        }
+                    })
+                }
+                }));
+
+            var vaultResponse = await vault.WaitForCompletionAsync();
+            var accessPolicyEntry = vaultResponse.Value.Properties.AccessPolicies.SingleOrDefault(x => x.ObjectId == currentUser.Id);
+ 
+
+            var storageManagementClient = new StorageManagementClient(configuration.SubscriptionId, new AzureCliCredential());
+            var storageOperation = await storageManagementClient.StorageAccounts.StartCreateAsync(configuration.ResourceGroupName, configuration.AccountName,
+                new StorageAccountCreateParameters(
+                    new Azure.ResourceManager.Storage.Models.Sku(Azure.ResourceManager.Storage.Models.SkuName.StandardLRS),
+                    Kind.StorageV2, configuration.Location));
+
+            var storageResponse = await storageOperation.WaitForCompletionAsync();
+            var response = await storageManagementClient.BlobContainers.CreateAsync(configuration.ResourceGroupName, configuration.AccountName, configuration.ContainerName,
+                new BlobContainer
+                {
+                    PublicAccess = PublicAccess.None
+                });
+
+            var sasList = await storageManagementClient.StorageAccounts.ListAccountSASAsync(configuration.ResourceGroupName,
+                configuration.AccountName,
+                new AccountSasParameters(Services.B, SignedResourceTypes.C, Azure.ResourceManager.Storage.Models.Permissions.W, DateTimeOffset.UtcNow.AddMinutes(30)));
+
+
+        }
+    }
+
+    public record PulumiResourceConfiguration(
+        string SubscriptionId, string Location, Guid TenantId, string VaultName,
+        string ResourceGroupName, string ContainerName, string AccountName);
+}
