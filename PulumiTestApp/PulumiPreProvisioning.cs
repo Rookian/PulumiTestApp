@@ -16,7 +16,7 @@ namespace PulumiTestApp
 {
     public class PulumiPreProvisioning
     {
-        public static async Task PreparePulumi(PulumiResourceConfiguration configuration)
+        public static async Task<Result> PreparePulumi(PulumiResourceConfiguration configuration)
         {
             var graphClient = new GraphServiceClient(new AzureCliCredential());
             var currentUser = await graphClient.Me.Request().GetAsync();
@@ -45,8 +45,7 @@ namespace PulumiTestApp
 
             var vaultResponse = await vault.WaitForCompletionAsync();
             var accessPolicyEntry = vaultResponse.Value.Properties.AccessPolicies.SingleOrDefault(x => x.ObjectId == currentUser.Id);
- 
-
+            
             var storageManagementClient = new StorageManagementClient(configuration.SubscriptionId, new AzureCliCredential());
             var storageOperation = await storageManagementClient.StorageAccounts.StartCreateAsync(configuration.ResourceGroupName, configuration.AccountName,
                 new StorageAccountCreateParameters(
@@ -59,16 +58,15 @@ namespace PulumiTestApp
                 {
                     PublicAccess = PublicAccess.None
                 });
-
-            var sasList = await storageManagementClient.StorageAccounts.ListAccountSASAsync(configuration.ResourceGroupName,
-                configuration.AccountName,
-                new AccountSasParameters(Services.B, SignedResourceTypes.C, Azure.ResourceManager.Storage.Models.Permissions.W, DateTimeOffset.UtcNow.AddMinutes(30)));
-
-
+            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName,configuration.AccountName);
+            
+            return new Result(keys.Value.Keys.First().Value);
         }
     }
 
     public record PulumiResourceConfiguration(
         string SubscriptionId, string Location, Guid TenantId, string VaultName,
         string ResourceGroupName, string ContainerName, string AccountName);
+
+    public record Result(string StorageKey);
 }

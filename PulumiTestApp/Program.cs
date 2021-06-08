@@ -18,15 +18,15 @@ namespace PulumiTestApp
         static async Task Main(string[] args)
         {
             var configuration = new PulumiResourceConfiguration(
-                SubscriptionId, Location, TenantId, "myappvaulta1b2", 
+                SubscriptionId, Location, TenantId, "myappvaulta1b2",
                 "myapp-infra", "pulumistate", "myapp1pulumistate");
 
-            await PulumiPreProvisioning.PreparePulumi(configuration);
-
+            var result = await PulumiPreProvisioning.PreparePulumi(configuration);
+            
             Environment.SetEnvironmentVariable("AZURE_KEYVAULT_AUTH_VIA_CLI", true.ToString());
             Environment.SetEnvironmentVariable("AZURE_STORAGE_ACCOUNT", "pulustate");
 
-            Environment.SetEnvironmentVariable("AZURE_STORAGE_KEY", "Y/opC/OygdBNze5TLQHMqiwBLYqPzfXEz59th2cGhIdeBRdBpNmJaI30X5dV42/8yQIR5IRvaLV8UHUJUspaLA==");
+            Environment.SetEnvironmentVariable("AZURE_STORAGE_KEY", result.StorageKey);
 
             var program = PulumiFn.Create(() =>
             {
@@ -62,10 +62,7 @@ namespace PulumiTestApp
             {
                 StackSettings = new Dictionary<string, StackSettings>
                 {
-                    [stackName] = new StackSettings
-                    {
-                        SecretsProvider = secretsProvider,
-                    }
+                    [stackName] = new() { SecretsProvider = secretsProvider, }
                 },
                 SecretsProvider = secretsProvider,
                 ProjectSettings = new ProjectSettings(projectName, ProjectRuntimeName.Dotnet)
@@ -73,7 +70,6 @@ namespace PulumiTestApp
                     Backend = new ProjectBackend { Url = "azblob://state-container" },
                 }
             };
-
 
             var stack = await LocalWorkspace.CreateOrSelectStackAsync(stackArgs);
 
