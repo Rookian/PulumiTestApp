@@ -8,6 +8,7 @@ using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using Microsoft.Graph;
+using KeyType = Azure.Security.KeyVault.Keys.KeyType;
 using Permissions = Azure.ResourceManager.KeyVault.Models.Permissions;
 using Sku = Azure.ResourceManager.KeyVault.Models.Sku;
 using SkuName = Azure.ResourceManager.KeyVault.Models.SkuName;
@@ -18,6 +19,7 @@ namespace PulumiTestApp
     {
         public static async Task<Result> PreparePulumi(PulumiResourceConfiguration configuration)
         {
+         
             var graphClient = new GraphServiceClient(new AzureCliCredential());
             var currentUser = await graphClient.Me.Request().GetAsync();
 
@@ -29,23 +31,30 @@ namespace PulumiTestApp
             var keyVaultManagementClient =
                 new Azure.ResourceManager.KeyVault.KeyVaultManagementClient(configuration.SubscriptionId, new AzureCliCredential());
 
+            //await keyVaultManagementClient.Vaults.StartPurgeDeletedAsync(configuration.VaultName,
+            //    configuration.Location);
+
             var vault = await keyVaultManagementClient.Vaults.StartCreateOrUpdateAsync(
                 configuration.ResourceGroupName, configuration.VaultName,
-                new VaultCreateOrUpdateParameters(configuration.Location, new VaultProperties(configuration.TenantId, new Sku(SkuName.Standard)){AccessPolicies = new List<AccessPolicyEntry>()
+                new VaultCreateOrUpdateParameters(configuration.Location, new VaultProperties(configuration.TenantId, new Sku(SkuName.Standard))
                 {
-                    new(configuration.TenantId, currentUser.Id, new Permissions
+                    AccessPolicies = new List<AccessPolicyEntry>
                     {
-                        Keys = new List<KeyPermissions>
+                        new(configuration.TenantId, currentUser.Id, new Permissions
                         {
-                            KeyPermissions.List, KeyPermissions.Decrypt, KeyPermissions.Encrypt, KeyPermissions.Get
-                        }
-                    })
-                }
+                            Keys = new List<KeyPermissions>
+                            {
+                                KeyPermissions.List, KeyPermissions.Decrypt, KeyPermissions.Encrypt, KeyPermissions.Get, KeyPermissions.Create
+                            }
+                        })
+                    }
                 }));
 
             var vaultResponse = await vault.WaitForCompletionAsync();
-            var accessPolicyEntry = vaultResponse.Value.Properties.AccessPolicies.SingleOrDefault(x => x.ObjectId == currentUser.Id);
-            
+
+            var keyClient = new Azure.Security.KeyVault.Keys.KeyClient(new Uri(vaultResponse.Value.Properties.VaultUri), new AzureCliCredential());
+            await keyClient.CreateKeyAsync(configuration.KeyName, KeyType.Rsa);
+
             var storageManagementClient = new StorageManagementClient(configuration.SubscriptionId, new AzureCliCredential());
             var storageOperation = await storageManagementClient.StorageAccounts.StartCreateAsync(configuration.ResourceGroupName, configuration.AccountName,
                 new StorageAccountCreateParameters(
@@ -58,15 +67,24 @@ namespace PulumiTestApp
                 {
                     PublicAccess = PublicAccess.None
                 });
-            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName,configuration.AccountName);
-            
+            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName, configuration.AccountName);
+
             return new Result(keys.Value.Keys.First().Value);
         }
     }
 
     public record PulumiResourceConfiguration(
-        string SubscriptionId, string Location, Guid TenantId, string VaultName,
-        string ResourceGroupName, string ContainerName, string AccountName);
+        string SubscriptionId,
+        string Location,
+        Guid TenantId,
+        string VaultName,
+        string ResourceGroupName,
+        string ContainerName,
+        string AccountName,
+        string KeyName
+    );
 
-    public record Result(string StorageKey);
+    public record Result(
+        string StorageKey
+    );
 }
