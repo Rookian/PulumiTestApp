@@ -7,17 +7,20 @@ namespace PulumiTestApp
 {
     public class MyStack : Stack
     {
-        public MyStack(MyConfig config)
+        public MyStack(StackConfig config)
         {
-            var resourceGroup = new ResourceGroup("myapp", new ResourceGroupArgs
+            var resourceGroup = new ResourceGroup($"myapp-{config.Environment}", new ResourceGroupArgs
             {
                 Location = config.Location,
+                Name = $"myapp-{config.Environment}"
             });
 
             var plan = new Plan("pulitestserviceplan", new PlanArgs
             {
                 Location = config.Location,
                 ResourceGroupName = resourceGroup.Name,
+                Kind = "Linux",
+                Reserved = true,
                 Sku = new PlanSkuArgs { Tier = "Standard", Size = "S1" }
             });
 

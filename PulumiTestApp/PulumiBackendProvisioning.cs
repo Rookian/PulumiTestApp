@@ -15,9 +15,9 @@ using SkuName = Azure.ResourceManager.KeyVault.Models.SkuName;
 
 namespace PulumiTestApp
 {
-    public class PulumiPreProvisioning
+    public class PulumiBackendProvisioning
     {
-        public static async Task<Result> PreparePulumi(PulumiBackendConfiguration configuration)
+        public static async Task<Result> Run(PulumiBackendConfiguration configuration)
         {
             var graphClient = new GraphServiceClient(new AzureCliCredential());
             var currentUser = await graphClient.Me.Request().GetAsync();

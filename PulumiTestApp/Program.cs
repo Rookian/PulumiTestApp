@@ -18,45 +18,48 @@ namespace PulumiTestApp
         {
             var serviceProvider = new ServiceCollection();
 
-            var myConfig = new MyConfig { Location = Location };
+            var stackConfig = new StackConfig
+            {
+                Location = Location,
+                Environment = "dev"
+            };
 
-            serviceProvider.AddSingleton(myConfig);
+            serviceProvider.AddSingleton(stackConfig);
             serviceProvider.AddSingleton<MyStack>();
 
-            var stackName = "dev";
 
-            var configuration = new PulumiBackendConfiguration
+            var pulumiBackendConfig = new PulumiBackendConfiguration
             {
                 SubscriptionId = SubscriptionId,
                 Location = Location,
                 TenantId = TenantId,
-                VaultName = $"myappvaulta1b2-{stackName}",
-                ResourceGroupName = $"myapp-infra-{stackName}",
-                AccountName = $"myapp1pulumistate{stackName}",
+                VaultName = $"myappvaulta1b2-{stackConfig.Environment}",
+                ResourceGroupName = $"myapp-infra-{stackConfig.Environment}",
+                AccountName = $"myapp1pulumistate{stackConfig.Environment}",
                 ContainerName = "pulumistate",
                 KeyName = "pulumi"
             };
 
-            var prepareResult = await PulumiPreProvisioning.PreparePulumi(configuration);
+            var prepareResult = await PulumiBackendProvisioning.Run(pulumiBackendConfig);
 
             Environment.SetEnvironmentVariable("AZURE_KEYVAULT_AUTH_VIA_CLI", true.ToString());
-            Environment.SetEnvironmentVariable("AZURE_STORAGE_ACCOUNT", configuration.AccountName);
+            Environment.SetEnvironmentVariable("AZURE_STORAGE_ACCOUNT", pulumiBackendConfig.AccountName);
             Environment.SetEnvironmentVariable("AZURE_STORAGE_KEY", prepareResult.StorageKey);
 
             var provider = serviceProvider.BuildServiceProvider();
             var program = PulumiFn.Create<MyStack>(provider);
 
-            var secretsProvider = $"azurekeyvault://{configuration.VaultName}.vault.azure.net/keys/{configuration.KeyName}";
-            var stackArgs = new InlineProgramArgs(ProjectName, stackName, program)
+            var secretsProvider = $"azurekeyvault://{pulumiBackendConfig.VaultName}.vault.azure.net/keys/{pulumiBackendConfig.KeyName}";
+            var stackArgs = new InlineProgramArgs(ProjectName, stackConfig.Environment, program)
             {
                 StackSettings = new Dictionary<string, StackSettings>
                 {
-                    [stackName] = new() { SecretsProvider = secretsProvider, }
+                    [stackConfig.Environment] = new() { SecretsProvider = secretsProvider, }
                 },
                 SecretsProvider = secretsProvider,
                 ProjectSettings = new ProjectSettings(ProjectName, ProjectRuntimeName.Dotnet)
                 {
-                    Backend = new ProjectBackend { Url = $"azblob://{configuration.ContainerName}" },
+                    Backend = new ProjectBackend { Url = $"azblob://{pulumiBackendConfig.ContainerName}" },
                 }
             };
 
@@ -77,9 +80,10 @@ namespace PulumiTestApp
         }
     }
 
-    public class MyConfig
+    public class StackConfig
     {
         public string Location { get; set; }
+        public string Environment { get; set; }
     }
 }
 
