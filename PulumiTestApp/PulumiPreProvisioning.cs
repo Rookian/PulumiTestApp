@@ -17,9 +17,8 @@ namespace PulumiTestApp
 {
     public class PulumiPreProvisioning
     {
-        public static async Task<Result> PreparePulumi(PulumiResourceConfiguration configuration)
+        public static async Task<Result> PreparePulumi(PulumiBackendConfiguration configuration)
         {
-         
             var graphClient = new GraphServiceClient(new AzureCliCredential());
             var currentUser = await graphClient.Me.Request().GetAsync();
 
@@ -30,9 +29,6 @@ namespace PulumiTestApp
 
             var keyVaultManagementClient =
                 new Azure.ResourceManager.KeyVault.KeyVaultManagementClient(configuration.SubscriptionId, new AzureCliCredential());
-
-            //await keyVaultManagementClient.Vaults.StartPurgeDeletedAsync(configuration.VaultName,
-            //    configuration.Location);
 
             var vault = await keyVaultManagementClient.Vaults.StartCreateOrUpdateAsync(
                 configuration.ResourceGroupName, configuration.VaultName,
@@ -61,8 +57,8 @@ namespace PulumiTestApp
                     new Azure.ResourceManager.Storage.Models.Sku(Azure.ResourceManager.Storage.Models.SkuName.StandardLRS),
                     Kind.StorageV2, configuration.Location));
 
-            var storageResponse = await storageOperation.WaitForCompletionAsync();
-            var response = await storageManagementClient.BlobContainers.CreateAsync(configuration.ResourceGroupName, configuration.AccountName, configuration.ContainerName,
+            await storageOperation.WaitForCompletionAsync();
+            await storageManagementClient.BlobContainers.CreateAsync(configuration.ResourceGroupName, configuration.AccountName, configuration.ContainerName,
                 new BlobContainer
                 {
                     PublicAccess = PublicAccess.None
@@ -73,16 +69,17 @@ namespace PulumiTestApp
         }
     }
 
-    public record PulumiResourceConfiguration(
-        string SubscriptionId,
-        string Location,
-        Guid TenantId,
-        string VaultName,
-        string ResourceGroupName,
-        string ContainerName,
-        string AccountName,
-        string KeyName
-    );
+    public record PulumiBackendConfiguration
+    {
+        public string SubscriptionId { get; init; }
+        public string Location { get; init; }
+        public Guid TenantId { get; init; }
+        public string VaultName { get; init; }
+        public string ResourceGroupName { get; init; }
+        public string ContainerName { get; init; }
+        public string AccountName { get; init; }
+        public string KeyName { get; init; }
+    }
 
     public record Result(
         string StorageKey

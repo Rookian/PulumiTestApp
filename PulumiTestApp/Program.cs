@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Pulumi.Automation;
-using Pulumi.Azure.AppService;
-using Pulumi.Azure.AppService.Inputs;
-using Pulumi.Azure.Core;
 using Environment = System.Environment;
 
 namespace PulumiTestApp
@@ -14,12 +12,30 @@ namespace PulumiTestApp
         private const string Location = "West Europe";
         private const string SubscriptionId = "cfed8a6e-91e3-4ba3-b79d-698c8b7b4e29";
         private static readonly Guid TenantId = Guid.Parse("17e6b881-0146-48e2-8241-7b564e5e94cb");
-
+        private const string ProjectName = "pulumi-test-project";
+        
         static async Task Main(string[] args)
         {
-            var configuration = new PulumiResourceConfiguration(
-                SubscriptionId, Location, TenantId, "myappvaulta1b2",
-                "myapp-infra", "pulumistate", "myapp1pulumistate", "pulumi");
+            var serviceProvider = new ServiceCollection();
+
+            var myConfig = new MyConfig { Location = Location };
+
+            serviceProvider.AddSingleton(myConfig);
+            serviceProvider.AddSingleton<MyStack>();
+
+            var stackName = "dev";
+
+            var configuration = new PulumiBackendConfiguration
+            {
+                SubscriptionId = SubscriptionId,
+                Location = Location,
+                TenantId = TenantId,
+                VaultName = $"myappvaulta1b2-{stackName}",
+                ResourceGroupName = $"myapp-infra-{stackName}",
+                AccountName = $"myapp1pulumistate{stackName}",
+                ContainerName = "pulumistate",
+                KeyName = "pulumi"
+            };
 
             var prepareResult = await PulumiPreProvisioning.PreparePulumi(configuration);
 
@@ -27,41 +43,18 @@ namespace PulumiTestApp
             Environment.SetEnvironmentVariable("AZURE_STORAGE_ACCOUNT", configuration.AccountName);
             Environment.SetEnvironmentVariable("AZURE_STORAGE_KEY", prepareResult.StorageKey);
 
-            var program = PulumiFn.Create(() =>
-            {
-                var resourceGroup = new ResourceGroup("myapp", new ResourceGroupArgs
-                {
-                    Location = Location,
-                });
-
-                var plan = new Plan("pulitestserviceplan", new PlanArgs
-                {
-                    Location = Location,
-                    ResourceGroupName = resourceGroup.Name,
-                    Sku = new PlanSkuArgs { Tier = "Standard", Size = "S1" }
-                });
-
-                var appService = new AppService("pulitestservice", new AppServiceArgs
-                {
-                    AppServicePlanId = plan.Id,
-                    Location = Location,
-                    ResourceGroupName = resourceGroup.Name,
-                });
-
-            });
-
-            var projectName = "pulumi-test-project";
-            var stackName = "dev";
+            var provider = serviceProvider.BuildServiceProvider();
+            var program = PulumiFn.Create<MyStack>(provider);
 
             var secretsProvider = $"azurekeyvault://{configuration.VaultName}.vault.azure.net/keys/{configuration.KeyName}";
-            var stackArgs = new InlineProgramArgs(projectName, stackName, program)
+            var stackArgs = new InlineProgramArgs(ProjectName, stackName, program)
             {
                 StackSettings = new Dictionary<string, StackSettings>
                 {
                     [stackName] = new() { SecretsProvider = secretsProvider, }
                 },
                 SecretsProvider = secretsProvider,
-                ProjectSettings = new ProjectSettings(projectName, ProjectRuntimeName.Dotnet)
+                ProjectSettings = new ProjectSettings(ProjectName, ProjectRuntimeName.Dotnet)
                 {
                     Backend = new ProjectBackend { Url = $"azblob://{configuration.ContainerName}" },
                 }
@@ -82,6 +75,11 @@ namespace PulumiTestApp
                     Console.WriteLine($"    {change.Key}: {change.Value}");
             }
         }
+    }
+
+    public class MyConfig
+    {
+        public string Location { get; set; }
     }
 }
 
