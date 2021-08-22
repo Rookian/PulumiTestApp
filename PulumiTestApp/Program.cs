@@ -14,7 +14,7 @@ namespace PulumiTestApp
         private static readonly Guid TenantId = Guid.Parse("17e6b881-0146-48e2-8241-7b564e5e94cb");
         private const string ProjectName = "pulumi-test-project";
         
-        static async Task Main(string[] args)
+        static async Task Main()
         {
             var serviceProvider = new ServiceCollection();
 
@@ -64,13 +64,21 @@ namespace PulumiTestApp
             };
 
             var stack = await LocalWorkspace.CreateOrSelectStackAsync(stackArgs);
-            await stack.Workspace.InstallPluginAsync("azure", "v4.6.0");
-
-            await stack.RefreshAsync(new RefreshOptions { OnStandardOutput = Console.WriteLine });
             Console.WriteLine("successfully initialized stack");
 
-            var result = await stack.UpAsync(new UpOptions { OnStandardOutput = Console.WriteLine });
+            Console.WriteLine("installing plugins...");
+            await stack.Workspace.InstallPluginAsync("azure", "v4.6.0");
+            await stack.Workspace.InstallPluginAsync("azure-native", "v1.20.0");
+            Console.WriteLine("plugins installed"); 
 
+            Console.WriteLine("refreshing stack...");
+            await stack.RefreshAsync(new RefreshOptions { OnStandardOutput = Console.WriteLine });
+            Console.WriteLine("refresh complete");
+
+            Console.WriteLine("updating stack...");
+            
+            var result = await stack.UpAsync(new UpOptions { OnStandardOutput = Console.WriteLine });
+            
             if (result.Summary.ResourceChanges != null)
             {
                 Console.WriteLine("update summary:");
