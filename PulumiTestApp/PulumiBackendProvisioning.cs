@@ -49,7 +49,7 @@ namespace PulumiTestApp
 
             var vaultResponse = await vault.WaitForCompletionAsync();
 
-            await CreateKeyIfNotExist(configuration.KeyName, vaultResponse.Value.Properties.VaultUri);
+            var keyVaultKey = await CreateKeyIfNotExist(configuration.KeyName, vaultResponse.Value.Properties.VaultUri);
 
             var storageManagementClient = new StorageManagementClient(configuration.SubscriptionId, new AzureCliCredential());
             var storageOperation = await storageManagementClient.StorageAccounts.StartCreateAsync(configuration.ResourceGroupName, configuration.AccountName,
@@ -65,21 +65,21 @@ namespace PulumiTestApp
                 });
 
 
-            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName, configuration.AccountName);
-            return new Result(keys.Value.Keys.First().Value);
+            var storageKeys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName, configuration.AccountName);
+            return new Result(storageKeys.Value.Keys.First().Value, keyVaultKey);
         }
 
-        private static async Task CreateKeyIfNotExist(string keyName, string vaultUri)
+        private static async Task<KeyVaultKey> CreateKeyIfNotExist(string keyName, string vaultUri)
         {
             var keyClient = new KeyClient(new Uri(vaultUri), new AzureCliCredential());
 
             try
             {
-                await keyClient.GetKeyAsync(keyName);
+                return (await keyClient.GetKeyAsync(keyName)).Value;
             }
             catch (Exception)
             {
-                await keyClient.CreateKeyAsync(keyName, KeyType.Rsa);
+                return (await keyClient.CreateKeyAsync(keyName, KeyType.Rsa)).Value;
             }
         }
     }
@@ -96,7 +96,5 @@ namespace PulumiTestApp
         public string KeyName { get; init; }
     }
 
-    public record Result(
-        string StorageKey
-    );
+    public record Result(string StorageKey, KeyVaultKey KeyVaultKey);
 }
