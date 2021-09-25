@@ -62,13 +62,13 @@ namespace PulumiTestApp
                     Backend = new ProjectBackend { Url = $"azblob://{pulumiBackendConfig.ContainerName}" },
                 }
             };
-
+            
             var stack = await LocalWorkspace.CreateOrSelectStackAsync(stackArgs);
             Console.WriteLine("successfully initialized stack");
 
             Console.WriteLine("installing plugins...");
-            await stack.Workspace.InstallPluginAsync("azure", "v4.6.0");
-            await stack.Workspace.InstallPluginAsync("azure-native", "v1.20.0");
+            await stack.Workspace.InstallPluginAsync("azure", "v4.19.0");
+            await stack.Workspace.InstallPluginAsync("azure-native", "v1.31.0");
             Console.WriteLine("plugins installed"); 
 
             Console.WriteLine("refreshing stack...");
@@ -78,6 +78,7 @@ namespace PulumiTestApp
             Console.WriteLine("updating stack...");
             
             var result = await stack.UpAsync(new UpOptions { OnStandardOutput = Console.WriteLine });
+            var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)];
             
             if (result.Summary.ResourceChanges != null)
             {

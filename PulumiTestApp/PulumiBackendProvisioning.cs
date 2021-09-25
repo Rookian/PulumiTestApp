@@ -7,6 +7,7 @@ using Azure.ResourceManager.KeyVault.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
+using Azure.Security.KeyVault.Keys;
 using Microsoft.Graph;
 using KeyType = Azure.Security.KeyVault.Keys.KeyType;
 using Permissions = Azure.ResourceManager.KeyVault.Models.Permissions;
@@ -48,8 +49,7 @@ namespace PulumiTestApp
 
             var vaultResponse = await vault.WaitForCompletionAsync();
 
-            var keyClient = new Azure.Security.KeyVault.Keys.KeyClient(new Uri(vaultResponse.Value.Properties.VaultUri), new AzureCliCredential());
-            await keyClient.CreateKeyAsync(configuration.KeyName, KeyType.Rsa);
+            await CreateKeyIfNotExist(configuration.KeyName, vaultResponse.Value.Properties.VaultUri);
 
             var storageManagementClient = new StorageManagementClient(configuration.SubscriptionId, new AzureCliCredential());
             var storageOperation = await storageManagementClient.StorageAccounts.StartCreateAsync(configuration.ResourceGroupName, configuration.AccountName,
@@ -63,9 +63,24 @@ namespace PulumiTestApp
                 {
                     PublicAccess = PublicAccess.None
                 });
-            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName, configuration.AccountName);
 
+
+            var keys = await storageManagementClient.StorageAccounts.ListKeysAsync(configuration.ResourceGroupName, configuration.AccountName);
             return new Result(keys.Value.Keys.First().Value);
+        }
+
+        private static async Task CreateKeyIfNotExist(string keyName, string vaultUri)
+        {
+            var keyClient = new KeyClient(new Uri(vaultUri), new AzureCliCredential());
+
+            try
+            {
+                await keyClient.GetKeyAsync(keyName);
+            }
+            catch (Exception)
+            {
+                await keyClient.CreateKeyAsync(keyName, KeyType.Rsa);
+            }
         }
     }
 
