@@ -64,7 +64,7 @@ namespace PulumiTestApp
                     Backend = new ProjectBackend { Url = $"azblob://{pulumiBackendConfig.ContainerName}" },
                 }
             };
-
+            
             var stack = await LocalWorkspace.CreateOrSelectStackAsync(stackArgs);
             Console.WriteLine("successfully initialized stack");
 
@@ -80,14 +80,16 @@ namespace PulumiTestApp
             Console.WriteLine("updating stack...");
 
             var result = await stack.UpAsync(new UpOptions { OnStandardOutput = Console.WriteLine });
-            var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)];
-            
+
             if (result.Summary.ResourceChanges != null)
             {
                 Console.WriteLine("update summary:");
                 foreach (var change in result.Summary.ResourceChanges)
                     Console.WriteLine($"    {change.Key}: {change.Value}");
             }
+
+            var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)].Value;
+
         }
     }
 

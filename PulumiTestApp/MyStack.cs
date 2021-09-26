@@ -42,12 +42,12 @@ namespace PulumiTestApp
             });
 
             const string administratorLogin = "myloginforsql";
-            const string administratorLoginPassword = "VrKPB8XGAwQnF/qgf22370+I0OILIo3DvqSKc4voVVjyvutPIYCvRN6TS/fQZBjtv0UnRw6tD9xGYy/+WA6AMG90R64tfNhVjKMlgoYcKPcz1Bx09YMdu2584wU9Qz6vvxwsVzZthio4mMNd90XqhttsWLkUtEZBGbJGRRzykcTACGpiq6+A1hoOvNPMXOTfJUKCZuEbjD3tE5b+bwtjqKae97OmW66L5fKUttnR3tS9jMhU3KeWPve4mnP8zQnAs0AIjuSoycPOb+ZO09vkR+glhgWyhwYm3lqBxC+75ZlpRYnD17dSCN88aNOdncZJgTAhzKV5AbpSsEjTOT1hgw==";
+            var administratorLoginPassword = Output.Create(cryptoService.Decrypt("VrKPB8XGAwQnF/qgf22370+I0OILIo3DvqSKc4voVVjyvutPIYCvRN6TS/fQZBjtv0UnRw6tD9xGYy/+WA6AMG90R64tfNhVjKMlgoYcKPcz1Bx09YMdu2584wU9Qz6vvxwsVzZthio4mMNd90XqhttsWLkUtEZBGbJGRRzykcTACGpiq6+A1hoOvNPMXOTfJUKCZuEbjD3tE5b+bwtjqKae97OmW66L5fKUttnR3tS9jMhU3KeWPve4mnP8zQnAs0AIjuSoycPOb+ZO09vkR+glhgWyhwYm3lqBxC+75ZlpRYnD17dSCN88aNOdncZJgTAhzKV5AbpSsEjTOT1hgw=="));
 
             var sqlServer = new Server("myServer", new ServerArgs
             {
                 AdministratorLogin = administratorLogin,
-                AdministratorLoginPassword = Output.Create(cryptoService.Decrypt(administratorLoginPassword)),
+                AdministratorLoginPassword = administratorLoginPassword,
                 ResourceGroupName = resourceGroup.Name,
             });
 
@@ -58,7 +58,8 @@ namespace PulumiTestApp
                 Sku = new SkuArgs { Family = "Gen5", Name = "Basic", Tier = "Basic" }
             });
 
-            SqlConnectionString = Output.CreateSecret($"Server=tcp:{sqlServer.Name}.database.windows.net;initial catalog={database.Name};User ID={administratorLogin};Password={administratorLoginPassword};Persist Security Info=true;");
+            
+            SqlConnectionString = Output.Format($"Server=tcp:{sqlServer.Name}.database.windows.net;initial catalog={database.Name};User ID={administratorLogin};Password={administratorLoginPassword};Persist Security Info=true;");
         }
     }
 }
