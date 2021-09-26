@@ -15,6 +15,12 @@ namespace PulumiTestApp
     {
         [Output]
         public Output<string> SqlConnectionString { get; set; }
+        
+        [Output]
+        public Output<string> WebAppManagedIdentity { get; set; }
+        
+        [Output]
+        public Output<string> SqlServerManagedIdentity { get; set; }
 
         public MyStack(StackConfig config, ICryptoService cryptoService)
         {
@@ -33,7 +39,7 @@ namespace PulumiTestApp
                 Sku = new SkuDescriptionArgs { Size = "B1", Tier = "Standard", Name = "B1" }
             });
 
-            new WebApp("myApp", new WebAppArgs
+            var webApp = new WebApp("myApp", new WebAppArgs
             {
                 Location = config.Location,
                 ResourceGroupName = resourceGroup.Name,
@@ -49,6 +55,7 @@ namespace PulumiTestApp
                 AdministratorLogin = administratorLogin,
                 AdministratorLoginPassword = administratorLoginPassword,
                 ResourceGroupName = resourceGroup.Name,
+                Identity = new ResourceIdentityArgs { Type = IdentityType.SystemAssigned }
             });
 
             var database = new Database("myDb", new DatabaseArgs
@@ -58,7 +65,9 @@ namespace PulumiTestApp
                 Sku = new SkuArgs { Family = "Gen5", Name = "Basic", Tier = "Basic" }
             });
 
-            
+
+            SqlServerManagedIdentity = sqlServer.Identity.Apply(x => x.PrincipalId);
+            WebAppManagedIdentity = webApp.Identity.Apply(x => x.PrincipalId);
             SqlConnectionString = Output.Format($"Server=tcp:{sqlServer.Name}.database.windows.net;initial catalog={database.Name};User ID={administratorLogin};Password={administratorLoginPassword};Persist Security Info=true;");
         }
     }
