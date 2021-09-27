@@ -40,7 +40,7 @@ namespace PulumiTestApp
                 KeyName = "pulumi"
             };
 
-            var prepareResult = await PulumiBackendProvisioning.Run(pulumiBackendConfig);
+            var prepareResult = await PulumiBackendPrerequisites.RunProvisioning(pulumiBackendConfig);
 
             serviceProvider.AddSingleton<ICryptoService, CryptoService>(_ => new CryptoService(prepareResult.KeyVaultKey.Id));
 
@@ -90,13 +90,8 @@ namespace PulumiTestApp
 
             var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)].Value;
 
-        }
-    }
 
-    public class StackConfig
-    {
-        public string Location { get; set; }
-        public string Environment { get; set; }
+        }
     }
 }
 
