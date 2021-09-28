@@ -15,10 +15,10 @@ namespace PulumiTestApp
     {
         [Output]
         public Output<string> SqlConnectionString { get; set; }
-        
+
         [Output]
         public Output<string> WebAppManagedIdentity { get; set; }
-        
+
         [Output]
         public Output<string> SqlServerManagedIdentity { get; set; }
 
@@ -55,8 +55,10 @@ namespace PulumiTestApp
                 AdministratorLogin = administratorLogin,
                 AdministratorLoginPassword = administratorLoginPassword,
                 ResourceGroupName = resourceGroup.Name,
-                Identity = new ResourceIdentityArgs { Type = IdentityType.SystemAssigned }
-            });
+
+                Identity = new ResourceIdentityArgs { Type = IdentityType.SystemAssigned },
+                Administrators = new ServerExternalAdministratorArgs { PrincipalType = PrincipalType.User, Login = "Alex A", Sid = "d8f2a40e-93da-4cf0-8c40-b8468bf79bde" }
+            }, new CustomResourceOptions { Protect = true });
 
             var database = new Database("myDb", new DatabaseArgs
             {
@@ -64,7 +66,6 @@ namespace PulumiTestApp
                 ServerName = sqlServer.Name,
                 Sku = new SkuArgs { Family = "Gen5", Name = "Basic", Tier = "Basic" }
             });
-
 
             SqlServerManagedIdentity = sqlServer.Identity.Apply(x => x.PrincipalId);
             WebAppManagedIdentity = webApp.Identity.Apply(x => x.PrincipalId);
