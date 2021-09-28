@@ -1,4 +1,5 @@
-﻿using Pulumi;
+﻿using System.Net.Http;
+using Pulumi;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Sql;
 using Pulumi.AzureNative.Web;
@@ -55,21 +56,40 @@ namespace PulumiTestApp
                 AdministratorLogin = administratorLogin,
                 AdministratorLoginPassword = administratorLoginPassword,
                 ResourceGroupName = resourceGroup.Name,
-
                 Identity = new ResourceIdentityArgs { Type = IdentityType.SystemAssigned },
                 Administrators = new ServerExternalAdministratorArgs { PrincipalType = PrincipalType.User, Login = "Alex A", Sid = "d8f2a40e-93da-4cf0-8c40-b8468bf79bde" }
-            }, new CustomResourceOptions { Protect = true });
+            });
 
             var database = new Database("myDb", new DatabaseArgs
             {
                 ResourceGroupName = resourceGroup.Name,
                 ServerName = sqlServer.Name,
-                Sku = new SkuArgs { Family = "Gen5", Name = "Basic", Tier = "Basic" }
+                Sku = new SkuArgs { Family = "Gen5", Name = "Basic", Tier = "Basic" },
+            });
+
+            new FirewallRule("myServerFWApps", new FirewallRuleArgs
+            {
+                StartIpAddress = "0.0.0.0",
+                EndIpAddress = "0.0.0.0",
+                FirewallRuleName = "apps",
+                ResourceGroupName = resourceGroup.Name,
+                ServerName = sqlServer.Name
+            });
+
+
+            var ipTask = new HttpClient().GetStringAsync("https://api.ipify.org");
+            new FirewallRule("myServerFWMyIp", new FirewallRuleArgs
+            {
+                StartIpAddress = Output.Create(ipTask),
+                EndIpAddress = Output.Create(ipTask),
+                FirewallRuleName = "my ip",
+                ResourceGroupName = resourceGroup.Name,
+                ServerName = sqlServer.Name
             });
 
             SqlServerManagedIdentity = sqlServer.Identity.Apply(x => x.PrincipalId);
             WebAppManagedIdentity = webApp.Identity.Apply(x => x.PrincipalId);
-            SqlConnectionString = Output.Format($"Server=tcp:{sqlServer.Name}.database.windows.net;initial catalog={database.Name};User ID={administratorLogin};Password={administratorLoginPassword};Persist Security Info=true;");
+            SqlConnectionString = Output.Format($"Server=tcp:{sqlServer.Name}.database.windows.net;initial catalog={database.Name};Authentication=Active Directory Default;");
         }
     }
 }

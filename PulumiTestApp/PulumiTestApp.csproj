@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.1" />
     <PackageReference Include="Pulumi.Automation" Version="3.13.0" />
     <!--<PackageReference Include="Pulumi.Azure" Version="4.6.0" />-->
     <PackageReference Include="Azure.ResourceManager.Resources" Version="1.0.0-preview.2" />

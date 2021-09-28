@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Pulumi.Automation;
 using Environment = System.Environment;
@@ -79,8 +80,9 @@ namespace PulumiTestApp
 
             Console.WriteLine("updating stack...");
 
+           
             var result = await stack.UpAsync(new UpOptions { OnStandardOutput = Console.WriteLine });
-
+           
             if (result.Summary.ResourceChanges != null)
             {
                 Console.WriteLine("update summary:");
@@ -88,9 +90,9 @@ namespace PulumiTestApp
                     Console.WriteLine($"    {change.Key}: {change.Value}");
             }
 
-            var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)].Value;
-
-
+            var sqlConnectionString = result.Outputs[nameof(MyStack.SqlConnectionString)].Value.ToString();
+            var sqlConnection = new SqlConnection(sqlConnectionString);
+            await sqlConnection.OpenAsync();
         }
     }
 }
