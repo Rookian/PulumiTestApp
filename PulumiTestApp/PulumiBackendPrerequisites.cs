@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager.KeyVault.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using Azure.Security.KeyVault.Keys;
-using Microsoft.Graph;
 using KeyType = Azure.Security.KeyVault.Keys.KeyType;
 using Permissions = Azure.ResourceManager.KeyVault.Models.Permissions;
 using Sku = Azure.ResourceManager.KeyVault.Models.Sku;
@@ -21,14 +22,13 @@ namespace PulumiTestApp
         public static async Task<PulumiBackendProvisioningResult> RunProvisioning(PulumiBackendConfiguration configuration)
         {
             await CreateResourceGroup(configuration.SubscriptionId, configuration.Location, configuration.ResourceGroupName);
-            
-            var keyVaultKey = await CreateAzureKeyVault(configuration.TenantId, configuration.SubscriptionId, configuration.ResourceGroupName, 
+            var (keyVaultKey, keyVaultUri) = await CreateAzureKeyVault(configuration.TenantId, configuration.SubscriptionId, configuration.ResourceGroupName,
                 configuration.Location, configuration.VaultName, configuration.KeyName);
-            
-            var storageKeys = await CreateBlobStorage(configuration.SubscriptionId, configuration.ResourceGroupName, 
+
+            var storageKeys = await CreateBlobStorage(configuration.SubscriptionId, configuration.ResourceGroupName,
                 configuration.Location, configuration.AccountName, configuration.ContainerName);
-            
-            return new PulumiBackendProvisioningResult(storageKeys, keyVaultKey);
+
+            return new PulumiBackendProvisioningResult(storageKeys, keyVaultKey, keyVaultUri);
         }
 
         private static async Task CreateResourceGroup(string subscriptionId, string location, string resourceGroupName)
@@ -59,16 +59,19 @@ namespace PulumiTestApp
 
 
             var storageKeys =
-                await storageManagementClient.StorageAccounts.ListKeysAsync(resourceGroupName,
-                    accountName);
+                await storageManagementClient.StorageAccounts.ListKeysAsync(resourceGroupName, accountName);
             return storageKeys.Value.Keys.First().Value;
         }
 
-        private static async Task<KeyVaultKey> CreateAzureKeyVault(Guid tenantId, string subscriptionId, string resourceGroupName,
+        private static async Task<(KeyVaultKey keyVaultKey, Uri keyVaultUri)> CreateAzureKeyVault(Guid tenantId, string subscriptionId, string resourceGroupName,
             string location, string vaultName, string keyName)
         {
-            var graphClient = new GraphServiceClient(new AzureCliCredential());
-            var currentUser = await graphClient.Me.Request().GetAsync();
+            var credential = new AzureCliCredential();
+            var token = await credential.GetTokenAsync(new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" }));
+            var accessToken = token.Token;
+
+            var jwtSecurityToken = new JwtSecurityTokenHandler().ReadJwtToken(accessToken);
+            var objectId = jwtSecurityToken.Payload.GetValueOrDefault("sub")?.ToString();
 
             var keyVaultManagementClient =
                 new Azure.ResourceManager.KeyVault.KeyVaultManagementClient(subscriptionId,
@@ -81,12 +84,16 @@ namespace PulumiTestApp
                     {
                         AccessPolicies = new List<AccessPolicyEntry>
                         {
-                            new(tenantId, currentUser.Id, new Permissions
+                            new(tenantId, objectId, new Permissions
                             {
                                 Keys = new List<KeyPermissions>
                                 {
                                     KeyPermissions.List, KeyPermissions.Decrypt, KeyPermissions.Encrypt, KeyPermissions.Get,
                                     KeyPermissions.Create
+                                },
+                                Secrets = new List<SecretPermissions>()
+                                {
+                                    SecretPermissions.Get, SecretPermissions.List
                                 }
                             })
                         }
@@ -94,8 +101,9 @@ namespace PulumiTestApp
 
             var vaultResponse = await vault.WaitForCompletionAsync();
 
-            var keyVaultKey = await CreateKeyIfNotExist(keyName, vaultResponse.Value.Properties.VaultUri);
-            return keyVaultKey;
+            var vaultUri = vaultResponse.Value.Properties.VaultUri;
+            var keyVaultKey = await CreateKeyIfNotExist(keyName, vaultUri);
+            return (keyVaultKey, new Uri(vaultUri));
         }
 
         private static async Task<KeyVaultKey> CreateKeyIfNotExist(string keyName, string vaultUri)
@@ -125,5 +133,5 @@ namespace PulumiTestApp
         public string KeyName { get; init; }
     }
 
-    public record PulumiBackendProvisioningResult(string StorageKey, KeyVaultKey KeyVaultKey);
+    public record PulumiBackendProvisioningResult(string StorageKey, KeyVaultKey KeyVaultKey, Uri KeyVaultUri);
 }
